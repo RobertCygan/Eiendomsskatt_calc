@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beregn eiendomsskatt – Steigen kommune (prototype)</title>
+<meta name="description" content="Prototype: veiledende beregning av eiendomsskatt for bolig og fritidsbolig i Steigen kommune etter Rammer og retningslinjer for taksering 2019 (rev. 2020).">
+<style>
+/* ==========================================================================
+   Skrift: Inter, samme som steigen.kommune.no. Innebygd for forhåndsvisning.
+   På kommunens nettside lastes Inter allerede av malen og kan fjernes her.
+   ========================================================================== */
+@font-face{font-family:Inter;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,{{FONT400}}) format("woff2")}
+@font-face{font-family:Inter;font-weight:500;font-display:swap;src:url(data:font/woff2;base64,{{FONT500}}) format("woff2")}
+@font-face{font-family:Inter;font-weight:600;font-display:swap;src:url(data:font/woff2;base64,{{FONT600}}) format("woff2")}
+@font-face{font-family:Inter;font-weight:700;font-display:swap;src:url(data:font/woff2;base64,{{FONT700}}) format("woff2")}
+
+/* Fargene er hentet fra steigen.kommune.no (:root-variablene i malen) */
+:root{
+  --c-primary-dark:#004C5C;
+  --c-neutral-button:#003640;
+  --c-primary-light:#CCE4E9;
+  --c-paper:#F9F7F2;
+  --c-warn:#FCE7C1;
+  --c-text:#000;
+  --c-muted:#3F5257;
+  --c-line:#B7CDD2;
+  --c-field:#5D7A80;
+  --c-row:#F1F8FA;
+  --c-error:#A3141E;
+  --radius:6px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:Inter,system-ui,sans-serif;font-size:17px;line-height:1.55;color:var(--c-text);background:var(--c-primary-light)}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--c-neutral-button);outline-offset:2px}
+.on-dark :focus-visible{outline-color:#fff}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.wrap{max-width:1152px;margin:0 auto;padding:0 24px}
+
+/* ---------- Forhåndsvisning av kommunens ramme (header/footer) ----------
+   Disse delene finnes allerede på steigen.kommune.no.
+   Ved publisering bygges bare <section id="eskatt-kalkulator"> inn. */
+.proto{background:var(--c-warn);color:#3E300B;font-size:14px;text-align:center;padding:8px 16px}
+.site-header{background:#fff}
+.site-header .wrap{display:flex;align-items:center;gap:28px;min-height:120px}
+.site-header img{height:72px;width:auto;display:block}
+.site-header nav{display:flex;gap:36px;flex:1;flex-wrap:wrap}
+.site-header nav a{font-size:16px}
+.hbtn{border:2px solid #000;border-radius:4px;padding:11px 26px;font-weight:500;background:#fff;display:inline-flex;gap:14px;align-items:center;font:inherit;font-weight:500}
+.hbtn.dark{background:var(--c-primary-dark);border-color:var(--c-primary-dark);color:#fff}
+.site-footer{background:var(--c-primary-dark);color:#fff;padding:36px 0 48px;margin-top:64px;font-size:15px}
+@media (max-width:900px){.site-header nav,.hbtn.search{display:none}.site-header .wrap{min-height:84px;justify-content:space-between}.site-header img{height:52px}}
+
+/* ------------------------------ Kalkulator ------------------------------ */
+.crumbs{padding:24px 0 4px;font-size:15px;color:var(--c-neutral-button)}
+.crumbs ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 10px}
+.crumbs li+li::before{content:"›";margin-right:10px}
+.crumbs [aria-current]{font-weight:600}
+h1{font-size:clamp(30px,4vw,40px);line-height:1.2;margin:8px 0 10px;color:var(--c-neutral-button)}
+.lead{max-width:760px;font-size:18px;margin:0 0 28px}
+
+.esk-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:32px;align-items:start}
+.card{background:#fff;border-radius:var(--radius);padding:32px 36px}
+
+/* Stegindikator */
+.steps{display:flex;margin:0 0 30px;padding:0;list-style:none}
+.steps li{flex:1;position:relative}
+.steps li:not(:last-child)::after{content:"";position:absolute;top:16px;left:44px;right:8px;height:2px;background:var(--c-line)}
+.steps li.done::after{background:var(--c-primary-dark)}
+.steps button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:8px;font-size:14px;font-weight:500;color:var(--c-muted);border-radius:4px}
+.steps button:focus-visible{outline:3px solid var(--c-neutral-button);outline-offset:3px}
+.steps .dot{width:32px;height:32px;border-radius:50%;border:2px solid var(--c-line);background:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--c-muted)}
+.steps li.done .dot{background:var(--c-primary-dark);border-color:var(--c-primary-dark);color:#fff}
+.steps li.current button{color:var(--c-neutral-button);font-weight:700}
+.steps li.current .dot{border-color:var(--c-primary-dark);color:var(--c-primary-dark);box-shadow:0 0 0 4px var(--c-primary-light)}
+
+.panel h2{font-size:24px;line-height:1.3;margin:0 0 6px;color:var(--c-neutral-button)}
+.panel h2:focus{outline:none}
+.sub{color:var(--c-muted);margin:0 0 22px}
+fieldset{border:0;margin:0 0 26px;padding:0;min-width:0}
+legend,.lbl{font-weight:600;font-size:16px;padding:0;margin-bottom:8px;display:block}
+.hint{font-size:14px;color:var(--c-muted);margin:-2px 0 10px}
+
+/* Radiokort */
+.cards{display:grid;gap:10px}
+.cards.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cards.c4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.opt{position:relative;display:flex;gap:12px;align-items:flex-start;border:2px solid var(--c-line);border-radius:var(--radius);padding:13px 14px;cursor:pointer;background:#fff}
+.opt input{position:absolute;opacity:0;width:1px;height:1px}
+.opt .mark{flex:none;width:22px;height:22px;border:2px solid var(--c-field);border-radius:50%;margin-top:1px;background:#fff}
+.opt input[type=checkbox]+.mark{border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700}
+.opt b{display:block;font-weight:600;line-height:1.35}
+.opt small{display:block;color:var(--c-muted);font-size:14px;line-height:1.4;margin-top:2px}
+.opt:has(input:checked){border-color:var(--c-primary-dark);background:var(--c-row)}
+.opt input:checked+.mark{border:7px solid var(--c-primary-dark)}
+.opt input[type=checkbox]:checked+.mark{border:2px solid var(--c-primary-dark);background:var(--c-primary-dark)}
+.opt input[type=checkbox]:checked+.mark::after{content:"✓"}
+.opt:has(input:focus-visible){outline:3px solid var(--c-neutral-button);outline-offset:2px}
+.opt:has(input:disabled){opacity:.45;cursor:not-allowed}
+.opt .f{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px;color:var(--c-muted);white-space:nowrap}
+
+/* Tallfelt */
+.fields{display:grid;gap:16px 18px;grid-template-columns:repeat(3,minmax(0,1fr));align-items:end}
+.cards.c4 .opt b{white-space:nowrap}
+.field label{display:block;font-weight:600;font-size:15px;margin-bottom:6px}
+.inbox{display:flex;align-items:center;border:2px solid var(--c-field);border-radius:4px;background:#fff;height:48px;padding:0 12px}
+.inbox:focus-within{border-color:var(--c-primary-dark);box-shadow:0 0 0 3px var(--c-primary-light)}
+.inbox input{all:unset;flex:1;min-width:0;font-size:17px;font-variant-numeric:tabular-nums}
+.inbox span{color:var(--c-muted);font-size:15px;margin-left:8px}
+.inbox:has(input:disabled){background:#EEF2F3}
+.field .fx{font-size:13px;color:var(--c-muted);margin-top:5px}
+.field.err .inbox{border-color:var(--c-error)}
+select{font:inherit;font-size:16px;width:100%;height:48px;border:2px solid var(--c-field);border-radius:4px;padding:0 12px;background:#fff;color:#000}
+select:focus-visible{outline:none;border-color:var(--c-primary-dark);box-shadow:0 0 0 3px var(--c-primary-light)}
+.sum{font-size:14px;color:var(--c-muted);margin-top:12px}
+.sum b{color:#000}
+.divider{height:1px;background:#D9E4E7;margin:6px 0 26px}
+.error{color:var(--c-error);font-size:15px;font-weight:500;margin:8px 0 0}
+.error:empty{display:none}
+
+/* Andre bygg */
+.blist{display:flex;flex-direction:column;gap:12px;margin-bottom:14px}
+.brow{display:grid;grid-template-columns:minmax(0,1fr) 150px auto;gap:12px;align-items:end;border:2px solid var(--c-line);border-radius:var(--radius);padding:14px}
+.brow .tag{grid-column:1/-1;font-size:13px;font-weight:600;color:var(--c-neutral-button);background:var(--c-primary-light);border-radius:20px;padding:2px 10px;justify-self:start}
+.empty{color:var(--c-muted);font-size:15px;border:2px dashed var(--c-line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+
+/* Knapper */
+.btn{font:inherit;font-weight:500;border-radius:4px;padding:13px 24px;cursor:pointer;border:2px solid var(--c-neutral-button);background:var(--c-neutral-button);color:#fff;display:inline-flex;align-items:center;gap:10px}
+.btn.sec{background:#fff;color:#000;border-color:#000}
+.btn.small{padding:8px 14px;font-size:15px}
+.btn.link{all:unset;cursor:pointer;text-decoration:underline;font-size:15px;color:var(--c-neutral-button);padding:10px 4px}
+.btn.link:focus-visible{outline:3px solid var(--c-neutral-button);outline-offset:2px;border-radius:2px}
+.nav{display:flex;justify-content:space-between;gap:12px;margin-top:30px;flex-wrap:wrap}
+
+/* Resultat */
+table{width:100%;border-collapse:collapse;font-size:15px}
+caption{text-align:left;font-weight:600;font-size:17px;padding:0 0 8px;color:var(--c-neutral-button)}
+th{text-align:left;font-weight:600;color:var(--c-muted);font-size:13px;padding:8px 6px;border-bottom:2px solid var(--c-neutral-button)}
+td{padding:10px 6px;border-bottom:1px solid #DBE6E9;vertical-align:top}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.tot td{font-weight:700;background:var(--c-row);border-bottom:2px solid var(--c-neutral-button)}
+tr.op td{color:#1D2B2E}
+td small{display:block;color:var(--c-muted);font-size:13px}
+.free{color:var(--c-muted)}
+.tablewrap{overflow-x:auto;margin-bottom:24px}
+.missing{background:var(--c-warn);border-radius:var(--radius);padding:16px 18px;margin-bottom:20px}
+.missing ul{margin:6px 0 0;padding-left:20px}
+details{border:2px solid var(--c-line);border-radius:var(--radius);padding:12px 16px;margin-top:8px}
+summary{cursor:pointer;font-weight:600;color:var(--c-neutral-button)}
+details p{margin:10px 0 0;font-size:15px}
+.formula{font-variant-numeric:tabular-nums;background:var(--c-row);border-radius:4px;padding:10px 12px;font-size:15px}
+
+/* Sidepanel */
+aside{position:sticky;top:20px}
+.box{background:var(--c-primary-dark);color:#fff;border-radius:var(--radius);padding:26px 28px}
+.box h2{margin:0;font-size:18px;font-weight:600}
+.big{font-size:42px;font-weight:700;line-height:1.1;margin:10px 0 4px;font-variant-numeric:tabular-nums}
+.box .unit{font-size:15px;opacity:.9}
+.box hr{border:0;border-top:1px solid rgba(255,255,255,.28);margin:18px 0}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:15px;padding:3px 0}
+.kv b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.box h3{margin:0 0 6px;font-size:16px;font-weight:600}
+.box .note{font-size:14px;opacity:.9}
+.kv.cur{background:rgba(255,255,255,.12);border-radius:4px;padding:3px 8px;margin:0 -8px}
+.info{background:var(--c-paper);border-radius:var(--radius);padding:18px 20px;margin-top:18px;font-size:15px;border-left:5px solid var(--c-primary-dark)}
+.info p{margin:0 0 8px}.info p:last-child{margin:0}
+
+/* Mobil: fast overslag nederst */
+.mbar{display:none}
+@media (max-width:900px){
+  .esk-grid{grid-template-columns:1fr}
+  aside{position:static}
+  .card{padding:22px 18px}
+  .wrap{padding:0 16px}
+  .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cards.c4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--c-neutral-button);color:#fff;padding:10px 16px;justify-content:space-between;align-items:center;font-size:15px;box-shadow:0 -2px 8px rgba(0,0,0,.15)}
+  .mbar b{font-size:18px}
+  body{padding-bottom:56px}
+  .steps .lab{display:none}
+  .steps li.current .lab{display:block}
+}
+@media (max-width:560px){
+  .cards.c2{grid-template-columns:1fr}
+  .brow{grid-template-columns:1fr 120px}
+  .brow .rm{grid-column:1/-1;justify-self:start}
+}
+@media print{
+  .proto,.site-header,.site-footer,.crumbs,.steps,.nav,.mbar,aside .box,.no-print{display:none!important}
+  body{background:#fff;font-size:12pt}
+  .esk-grid{display:block}.card{padding:0}
+  .panel{display:none!important}.panel[data-step="4"]{display:block!important}
+  aside{position:static}
+}
+</style>
+</head>
+<body>
+
+<div class="proto" role="note">PROTOTYPE – ikke kommunens offisielle kalkulator. Satser fra «Rammer og retningslinjer for taksering 2019» (rev. 17.02.2020).</div>
+
+<!-- ===== Forhåndsvisning av kommunens header (finnes allerede på nettsiden) ===== -->
+<header class="site-header">
+  <div class="wrap">
+    <a href="#" aria-label="Steigen kommune – forsiden"><img src="data:image/png;base64,{{LOGO}}" alt="Steigen kommune"></a>
+    <nav aria-label="Snarveier"><a href="#">Ledige stillinger</a><a href="#">Kontakt oss</a><a href="#">Finn en ansatt</a><a href="#">Priser/gebyrer</a></nav>
+    <button class="hbtn search" type="button">Søk <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="9" r="6.5"/><path d="M14 14l4 4"/></svg></button>
+    <button class="hbtn dark" type="button">Meny <svg width="18" height="14" viewBox="0 0 20 14" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M0 1h20M0 7h20M0 13h20"/></svg></button>
+  </div>
+</header>
+
+<main class="wrap" id="innhold">
+  <nav class="crumbs" aria-label="Brødsmulesti"><ol><li><a href="#">Forside</a></li><li><a href="#">Plan, bygg, brann og eiendom</a></li><li><a href="#">Eiendomsskatt</a></li><li aria-current="page">Beregn eiendomsskatt</li></ol></nav>
+  <h1>Beregn eiendomsskatt</h1>
+  <p class="lead">Fyll inn opplysninger om boligen eller fritidsboligen din og få et overslag over eiendomsskatten for <span data-year></span>. Beregningen følger kommunens regler for taksering.</p>
+
+<!-- ===================== KALKULATOR (dette bygges inn på nettsiden) ===================== -->
+<section id="eskatt-kalkulator" aria-label="Kalkulator for eiendomsskatt">
+<div class="esk-grid">
+  <div class="card">
+    <ol class="steps" id="steps"></ol>
+
+    <!-- STEG 1 -->
+    <div class="panel" data-step="1">
+      <h2 tabindex="-1">Bolig</h2>
+      <p class="sub">Arealet er bruksareal (BRA), slik det er registrert i Matrikkelen. Du finner det i byggesøknaden eller ved å kontakte kommunen.</p>
+
+      <fieldset>
+        <legend>Hva slags eiendom er det?</legend>
+        <div class="cards c2" id="typeList"></div>
+        <p class="error" id="errType"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Bruksareal per etasje</legend>
+        <p class="hint">Har boligen flere hovedetasjer, legger du dem sammen.</p>
+        <div class="fields" id="floorFields"></div>
+        <p class="sum" aria-live="polite">Vektet areal: <b id="weighted">0 m²</b></p>
+        <p class="error" id="errArea"></p>
+      </fieldset>
+
+      <div class="divider"></div>
+
+      <fieldset>
+        <legend>Når ble boligen tatt i bruk?</legend>
+        <div class="cards c4" id="yearList"></div>
+        <p class="error" id="errYear"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Standard sammenlignet med andre bygg fra samme periode</legend>
+        <p class="hint">De fleste har normal standard. Endelig vurdering gjøres av kommunen ved besiktigelse.</p>
+        <div class="cards" id="stdList"></div>
+      </fieldset>
+
+      <div class="nav"><span></span><button class="btn" type="button" data-go="2">Neste: Andre bygg <span aria-hidden="true">→</span></button></div>
+    </div>
+
+    <!-- STEG 2 -->
+    <div class="panel" data-step="2" hidden>
+      <h2 tabindex="-1">Andre bygg</h2>
+      <p class="sub">Garasje, uthus, naust, anneks og lignende på samme eiendom. Bygninger på 15 m² eller mindre beskattes ikke.</p>
+      <div class="blist" id="blist"></div>
+      <p class="empty" id="bempty">Ingen andre bygg lagt til. Hopp over steget hvis eiendommen bare har bolig eller fritidsbolig.</p>
+      <button class="btn sec small" type="button" id="addB">+ Legg til bygning</button>
+      <div class="nav"><button class="btn sec" type="button" data-go="1"><span aria-hidden="true">←</span> Tilbake</button><button class="btn" type="button" data-go="3">Neste: Tomt og sone <span aria-hidden="true">→</span></button></div>
+    </div>
+
+    <!-- STEG 3 -->
+    <div class="panel" data-step="3" hidden>
+      <h2 tabindex="-1">Tomt og sone</h2>
+      <p class="sub">Tomten verdsettes med <span data-tomtpris></span> per m², med inntil <span data-tomtmaks></span>.</p>
+
+      <fieldset>
+        <legend class="sr-only">Tomt</legend>
+        <div class="fields">
+          <div class="field" id="fTomt"><label for="tomt">Tomteareal</label><div class="inbox"><input id="tomt" inputmode="decimal" autocomplete="off" aria-describedby="tomtHint errTomt"><span>m²</span></div><p class="fx" id="tomtHint">Areal etter målebrev</p></div>
+        </div>
+        <div class="cards" style="margin-top:14px">
+          <label class="opt"><input type="checkbox" id="noMaal"><span class="mark" aria-hidden="true"></span><span><b>Målebrev finnes ikke</b><small>Da settes tomtearealet til <span data-tomtmaks></span>.</small></span></label>
+          <label class="opt"><input type="checkbox" id="gard"><span class="mark" aria-hidden="true"></span><span><b>Boligen hører til et gårdsbruk i drift</b><small>Gårdbrukers bolig får 10 % reduksjon, og tomten regnes med inntil <span data-tomtgard></span>. Driftsbygninger på gårdsbruket er fritatt.</small></span></label>
+        </div>
+        <p class="error" id="errTomt"></p>
+      </fieldset>
+
+      <div class="divider"></div>
+
+      <div class="field" style="margin-bottom:26px">
+        <label for="sone">Sone (område)</label>
+        <p class="hint" id="soneHint">Sonefaktoren gjenspeiler prisnivået i området. Er du usikker, kontakt eiendomsskattekontoret.</p>
+        <select id="sone" aria-describedby="soneHint errSone"></select>
+        <p class="error" id="errSone"></p>
+      </div>
+
+      <fieldset>
+        <legend>Beliggenhet (ytre faktor)</legend>
+        <p class="hint">De fleste eiendommer har normal beliggenhet. Redusert faktor settes av kommunen ved besiktigelse når forhold rundt eiendommen trekker verdien ned.</p>
+        <div class="cards" id="ytreList"></div>
+      </fieldset>
+
+      <div class="nav"><button class="btn sec" type="button" data-go="2"><span aria-hidden="true">←</span> Tilbake</button><button class="btn" type="button" data-go="4">Se resultat <span aria-hidden="true">→</span></button></div>
+    </div>
+
+    <!-- STEG 4 -->
+    <div class="panel" data-step="4" hidden>
+      <h2 tabindex="-1">Slik er eiendomsskatten beregnet</h2>
+      <p class="sub" id="resSub"></p>
+      <div id="resMissing"></div>
+      <div id="resBody"></div>
+
+      <details>
+        <summary>Formelen kommunen bruker</summary>
+        <p class="formula">Takst = (bygningsareal × etasjefaktor × sats per m² + tomteareal × tomtepris) × sonefaktor × ytre faktor × indre faktor</p>
+        <p class="formula">Eiendomsskatt = (takst × <span data-red></span> − bunnfradrag) × skattesats</p>
+        <p>Kilde: «Rammer og retningslinjer for taksering i Steigen kommune 2019», vedtatt i sakkyndig takstnemnd, revidert 17.02.2020, og kommunestyrets vedtak om skattesats.</p>
+      </details>
+
+      <div class="nav no-print"><button class="btn sec" type="button" data-go="3"><span aria-hidden="true">←</span> Endre opplysninger</button><span style="display:flex;gap:12px;flex-wrap:wrap"><button class="btn sec" type="button" id="reset">Start på nytt</button><button class="btn" type="button" id="print">Skriv ut / lagre som PDF</button></span></div>
+    </div>
+  </div>
+
+  <aside aria-label="Overslag">
+    <div class="box on-dark">
+      <h2 id="boxTitle">Foreløpig overslag</h2>
+      <div class="big" id="bigVal" aria-live="polite" aria-atomic="true">–</div>
+      <div class="unit" id="bigUnit">Fyll inn opplysningene for å se overslaget</div>
+      <hr>
+      <div id="boxRows"></div>
+      <div id="whatIf"></div>
+    </div>
+    <div class="info">
+      <p><b>Dette er et overslag.</b> Kommunens takst bygger på opplysninger i Matrikkelen og utvendig besiktigelse. Indre og ytre faktor fastsettes av sakkyndig takstnemnd.</p>
+      <p>Stemmer ikke areal eller byggeår? Gi beskjed til kommunen, eller les om <a href="#">klage på eiendomsskatt</a>.</p>
+    </div>
+  </aside>
+</div>
+<div class="mbar" aria-hidden="true"><span>Overslag</span><b id="mVal">–</b></div>
+</section>
+<!-- =================== SLUTT KALKULATOR =================== -->
+</main>
+
+<footer class="site-footer"><div class="wrap">Steigen kommune</div></footer>
+
+<script>
+/* ==========================================================================
+   PARAMETERE – alt som kan endre seg ligger her.
+   Kilde: Rammer og retningslinjer for taksering 2019 (rev. 17.02.2020),
+   pkt. 4.5–5.1, og kommunestyrets årlige vedtak (skattesats, bunnfradrag).
+   ========================================================================== */
+const CONFIG = {
+  skatteaar: 2026,
+  skattesatsPromille: 4,        // bolig- og fritidseiendom (kommunens nettside)
+  reduksjonsfaktor: 0.7,        // eiendomsskatteloven § 8 A-2: verdi × 0,7 for bolig og fritid
+  bunnfradrag: 0,               // kr per selvstendig boenhet. MÅ BEKREFTES mot årets budsjettvedtak
+  bunnfradragForFritid: false,  // bunnfradrag gjelder boenheter
+  terminer: 4,
+
+  boligtyper: [                 // pkt. 4.5 Sjablonverdier pr kvm BRA (hovedetasjer)
+    {id:'enebolig', navn:'Enebolig, våningshus, tomannsbolig', sats:10000, kategori:'bolig'},
+    {id:'rekkehus', navn:'Rekkehus, kjedehus, andre småhus',   sats:10000, kategori:'bolig'},
+    {id:'terrasse', navn:'Terrassehus, store boligbygg',        sats:10000, kategori:'bolig'},
+    {id:'fritid',   navn:'Fritidsbolig, fritidsleilighet',      sats:10000, kategori:'fritid'}
+  ],
+  etasjer: [                    // pkt. 4.6 Etasjefaktorer
+    {id:'hoved',   navn:'Hovedetasje(r)', faktor:1.00},
+    {id:'under',   navn:'Underetasje',    faktor:0.60},
+    {id:'sokkel',  navn:'Herav sokkelleilighet/hybel', faktor:0.80, delAv:'under'},
+    {id:'loft',    navn:'Loftsetasje',    faktor:0.30},
+    {id:'kjeller', navn:'Kjelleretasje',  faktor:0.20}
+  ],
+  andreBygg: [                  // pkt. 4.5
+    {id:'garasje', navn:'Garasje, uthus, naust', sats:2000},
+    {id:'anneks',  navn:'Anneks med funksjon som bolig/fritidsbolig', sats:10000},
+    {id:'carport', navn:'Carport med tak, plasthall', sats:1000},
+    {id:'fjos',    navn:'Landbruksbygning/fjøs (gårdsbruk ikke i drift)', sats:1000}
+  ],
+  fritakMaksAreal: 15,          // øvrige bygninger t.o.m. 15 m² beskattes ikke
+  tomt: {pris:50, maksAreal:2000, arealUtenMaalebrev:2000, maksArealGardsbruk:1000},
+  gardsbrukFaktor: 0.9,         // pkt. 5.1: gårdbrukers bolig på gårdsbruk i drift
+  soner: [                      // pkt. 4.7 Sonefaktor
+    {navn:'Leinesfjord, Saurselva, avkj. Småtindan, skogsvei Lagmansosen', faktor:1.0},
+    {navn:'Leines til Fløstrand (gnr. 11)', faktor:0.9},
+    {navn:'Laskestad, Steigberg, vei til Vik', faktor:0.9},
+    {navn:'Steigberg til Mjelle (Engeløya)', faktor:0.8},
+    {navn:'Nordfold, tverrvei Ytterkleiva – Ulvegraven, Mølnelva (Lakså), Kjærlighetskroken', faktor:0.9},
+    {navn:'Bogen, vei til Vik, t.o.m. Haug, t.o.m. Vinsnes, t.o.m. Dypvik', faktor:0.9},
+    {navn:'Skjenaust, Skånland, kryss til Markvatnet', faktor:0.8},
+    {navn:'Fure, Skjelvareid, Stensland, Dyping', faktor:0.8},
+    {navn:'Nordskott inkl. Båtberget, til Lund', faktor:0.8},
+    {navn:'Lakså', faktor:0.8},
+    {navn:'Øvrige områder i kommunen', faktor:0.7}
+  ],
+  ytre: [                       // pkt. 5.1 Ytre faktor
+    {id:'normal', navn:'Normal beliggenhet', faktor:1.0, tekst:'Gjelder de fleste eiendommer'},
+    {id:'darlig', navn:'Dårlig beliggenhet', faktor:0.8, tekst:'Settes av kommunen ved besiktigelse'},
+    {id:'sarlig', navn:'Særlig dårlig beliggenhet', faktor:0.6, tekst:'Settes av kommunen ved besiktigelse'}
+  ],
+  alder: [                      // pkt. 5.1 Indre faktor (aldersfaktor). Maks 1,0.
+    {id:'2010', navn:'2010 eller senere', hoy:null, normal:1.0, lav:null},
+    {id:'1986', navn:'1986–2009',         hoy:1.0,  normal:0.9, lav:[0.7,0.8]},
+    {id:'1960', navn:'1960–1985',         hoy:0.9,  normal:0.8, lav:[0.6,0.7]},
+    {id:'f60',  navn:'Før 1960',          hoy:0.75, normal:0.6, lav:[0.4,0.5]}
+  ],
+  standarder: [
+    {id:'normal', navn:'Normal standard', tekst:'Vanlig standard og vedlikehold for byggeåret'},
+    {id:'hoy',    navn:'Vesentlig oppgradert, påbygd eller ombygd', tekst:'Klart høyere standard enn normalt for byggeåret'},
+    {id:'lav',    navn:'Vesentlig dårligere enn normalt', tekst:'For eksempel svært dårlig isolasjon, råte eller setningsskader'}
+  ],
+  indreFaktorGjelderTomt: true  // «Aldersfaktor for eiendom (tomt og bygninger dersom bebygd)»
+};
+
+/* ============================== Hjelpefunksjoner ============================== */
+const $ = s => document.querySelector(s);
+const nf0 = new Intl.NumberFormat('nb-NO',{maximumFractionDigits:0});
+const nf2 = new Intl.NumberFormat('nb-NO',{minimumFractionDigits:2,maximumFractionDigits:2});
+const kr  = v => nf0.format(Math.round(v)) + ' kr';
+const m2  = v => nf0.format(v) + ' m²';
+const fx  = v => nf2.format(v);
+const num = s => { const v = parseFloat(String(s||'').replace(/\s/g,'').replace(',','.')); return isFinite(v) && v > 0 ? v : 0; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const lavMid = r => (r[0] + r[1]) / 2;
+
+/* ================================= Tilstand ================================= */
+const S = {
+  step: 1,
+  type: null,
+  floors: {hoved:'', under:'', sokkel:'', loft:'', kjeller:''},
+  alder: null,
+  standard: 'normal',
+  bygg: [],              // {id, type, areal}
+  tomt: '',
+  noMaal: false,
+  gard: false,
+  sone: '',
+  ytre: 'normal'
+};
+let byggSeq = 0;
+
+/* ================================ Beregning ================================ */
+function indreFaktor(alderId, std){
+  const a = CONFIG.alder.find(x => x.id === alderId);
+  if (!a) return null;
+  if (std === 'hoy' && a.hoy != null) return Math.min(1, a.hoy);
+  if (std === 'lav' && a.lav) return lavMid(a.lav);
+  return a.normal;
+}
+
+function beregn(state){
+  const t = CONFIG.boligtyper.find(x => x.id === state.type);
+  const sats = t ? t.sats : 10000;
+  const rows = [];
+  // Bolig – etasjer
+  const fl = {}; for (const k in state.floors) fl[k] = num(state.floors[k]);
+  const sokkel = Math.min(fl.sokkel, fl.under);
+  const underRest = fl.under - sokkel;
+  const etasjeAreal = {hoved:fl.hoved, under:underRest, sokkel:sokkel, loft:fl.loft, kjeller:fl.kjeller};
+  let vektet = 0, byggVerdi = 0;
+  for (const e of CONFIG.etasjer){
+    const a = etasjeAreal[e.id]; if (!a) continue;
+    const v = a * e.faktor * sats;
+    vektet += a * e.faktor; byggVerdi += v;
+    rows.push({obj:(t && t.kategori==='fritid' ? 'Fritidsbolig' : 'Bolig') + ' – ' + e.navn.toLowerCase().replace('herav ',''), areal:a, faktor:e.faktor, sats, verdi:v});
+  }
+  // Andre bygg
+  for (const b of state.bygg){
+    const bt = CONFIG.andreBygg.find(x => x.id === b.type); const a = num(b.areal);
+    if (!bt || !a) continue;
+    const fri = a <= CONFIG.fritakMaksAreal;
+    const v = fri ? 0 : a * bt.sats;
+    byggVerdi += v;
+    rows.push({obj:bt.navn, areal:a, faktor:1, sats:bt.sats, verdi:v, fri});
+  }
+  // Tomt
+  const T = CONFIG.tomt;
+  const maks = state.gard ? T.maksArealGardsbruk : T.maksAreal;
+  const oppgitt = num(state.tomt);
+  const tomtAreal = state.noMaal ? Math.min(T.arealUtenMaalebrev, maks) : Math.min(oppgitt, maks);
+  const tomtVerdi = tomtAreal * T.pris;
+  const sjablong = byggVerdi + tomtVerdi;
+
+  const sone = state.sone === '' ? null : CONFIG.soner[+state.sone];
+  const ytre = CONFIG.ytre.find(x => x.id === state.ytre) || CONFIG.ytre[0];
+  const indre = indreFaktor(state.alder, state.standard);
+  const gardF = state.gard ? CONFIG.gardsbrukFaktor : 1;
+
+  let takst = null, grunnlag = null, skatt = null, bunn = 0;
+  const kat = t ? t.kategori : 'bolig';
+  if (sone && indre != null){
+    const indreBygg = indre, indreTomt = CONFIG.indreFaktorGjelderTomt ? indre : 1;
+    takst = (byggVerdi * indreBygg + tomtVerdi * indreTomt) * sone.faktor * ytre.faktor * gardF;
+    bunn = (kat === 'bolig' || CONFIG.bunnfradragForFritid) ? CONFIG.bunnfradrag : 0;
+    grunnlag = Math.max(0, takst * CONFIG.reduksjonsfaktor - bunn);
+    skatt = grunnlag * CONFIG.skattesatsPromille / 1000;
+  }
+  return {rows, vektet, byggVerdi, tomtAreal, oppgitt, tomtVerdi, sjablong, sone, ytre, indre, gardF, takst, bunn, grunnlag, skatt, kat, sats};
+}
+
+function mangler(){
+  const m = [];
+  if (!S.type) m.push({tekst:'Hva slags eiendom det er', steg:1});
+  const fl = S.floors; if (!(num(fl.hoved)+num(fl.under)+num(fl.loft)+num(fl.kjeller))) m.push({tekst:'Bruksareal for minst én etasje', steg:1});
+  if (!S.alder) m.push({tekst:'Når boligen ble tatt i bruk', steg:1});
+  if (!S.noMaal && !num(S.tomt)) m.push({tekst:'Tomteareal (eller kryss av for at målebrev ikke finnes)', steg:3});
+  if (S.sone === '') m.push({tekst:'Sone', steg:3});
+  return m;
+}
+
+/* ============================ Bygging av skjema ============================ */
+function radioCards(container, name, items, getLabel){
+  container.innerHTML = items.map(it => {
+    const l = getLabel(it);
+    return `<label class="opt"><input type="radio" name="${name}" value="${esc(it.id)}"><span class="mark" aria-hidden="true"></span><span><b>${esc(l.navn)}</b>${l.tekst?`<small>${esc(l.tekst)}</small>`:''}</span>${l.f?`<span class="f">${l.f}</span>`:''}</label>`;
+  }).join('');
+}
+
+function buildForm(){
+  document.querySelectorAll('[data-year]').forEach(e => e.textContent = CONFIG.skatteaar);
+  document.querySelectorAll('[data-tomtpris]').forEach(e => e.textContent = kr(CONFIG.tomt.pris));
+  document.querySelectorAll('[data-tomtmaks]').forEach(e => e.textContent = m2(CONFIG.tomt.maksAreal));
+  document.querySelectorAll('[data-tomtgard]').forEach(e => e.textContent = m2(CONFIG.tomt.maksArealGardsbruk));
+  document.querySelectorAll('[data-red]').forEach(e => e.textContent = fx(CONFIG.reduksjonsfaktor));
+
+  radioCards($('#typeList'), 'type', CONFIG.boligtyper, t => ({navn:t.navn, tekst:nf0.format(t.sats)+' kr per m²'}));
+  radioCards($('#yearList'), 'alder', CONFIG.alder, a => ({navn:a.navn}));
+  radioCards($('#stdList'), 'std', CONFIG.standarder, s => ({navn:s.navn, tekst:s.tekst}));
+  radioCards($('#ytreList'), 'ytre', CONFIG.ytre, y => ({navn:y.navn, tekst:y.tekst, f:'faktor '+fx(y.faktor)}));
+
+  $('#floorFields').innerHTML = CONFIG.etasjer.map(e => `
+    <div class="field" id="f_${e.id}">
+      <label for="fl_${e.id}">${esc(e.navn)}</label>
+      <div class="inbox"><input id="fl_${e.id}" data-floor="${e.id}" inputmode="decimal" autocomplete="off" aria-describedby="fx_${e.id}"><span>m²</span></div>
+      <p class="fx" id="fx_${e.id}">Etasjefaktor ${fx(e.faktor)}</p>
+    </div>`).join('');
+
+  $('#sone').innerHTML = '<option value="">Velg sone …</option>' + CONFIG.soner.map((s,i) => `<option value="${i}">${esc(s.navn)} (${fx(s.faktor)})</option>`).join('');
+
+  // Steg
+  const navn = ['Bolig','Andre bygg','Tomt og sone','Resultat'];
+  $('#steps').innerHTML = navn.map((n,i) => `<li data-s="${i+1}"><button type="button" data-go="${i+1}"><span class="dot">${i+1}</span><span class="lab">${n}</span></button></li>`).join('');
+
+  // Standardvalg
+  document.querySelector('input[name=std][value=normal]').checked = true;
+  document.querySelector('input[name=ytre][value=normal]').checked = true;
+}
+
+function renderBygg(){
+  const list = $('#blist');
+  list.innerHTML = S.bygg.map(b => {
+    const a = num(b.areal); const fri = a > 0 && a <= CONFIG.fritakMaksAreal;
+    return `<div class="brow" data-id="${b.id}">
+      <div class="field"><label for="bt_${b.id}">Type bygning</label>
+        <select id="bt_${b.id}" data-bt="${b.id}">${CONFIG.andreBygg.map(t => `<option value="${t.id}" ${t.id===b.type?'selected':''}>${esc(t.navn)} – ${nf0.format(t.sats)} kr/m²</option>`).join('')}</select></div>
+      <div class="field"><label for="ba_${b.id}">Bruksareal</label><div class="inbox"><input id="ba_${b.id}" data-ba="${b.id}" inputmode="decimal" autocomplete="off" value="${esc(b.areal)}"><span>m²</span></div></div>
+      <button type="button" class="btn link rm" data-rm="${b.id}">Fjern<span class="sr-only"> bygning</span></button>
+      ${fri?'<span class="tag">Ikke skattepliktig (15 m² eller mindre)</span>':''}
+    </div>`;
+  }).join('');
+  $('#bempty').hidden = S.bygg.length > 0;
+}
+
+/* ================================ Visning ================================ */
+function showStep(n, focus=true){
+  S.step = n;
+  document.querySelectorAll('.panel').forEach(p => p.hidden = +p.dataset.step !== n);
+  document.querySelectorAll('#steps li').forEach(li => {
+    const s = +li.dataset.s;
+    li.classList.toggle('current', s === n);
+    li.classList.toggle('done', s < n);
+    const b = li.querySelector('button');
+    if (s === n) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current');
+    b.setAttribute('aria-label', `Steg ${s} av 4: ${li.querySelector('.lab').textContent}${s<n?' (fullført)':''}`);
+  });
+  if (n === 4) renderResult();
+  if (focus){ const h = document.querySelector(`.panel[data-step="${n}"] h2`); h && h.focus(); window.scrollTo({top: document.querySelector('#eskatt-kalkulator').offsetTop - 12, behavior:'smooth'}); }
+}
+
+function validateStep(n){
+  let ok = true;
+  const set = (id,msg) => { $(id).textContent = msg; if (msg) ok = false; };
+  if (n === 1){
+    set('#errType', S.type ? '' : 'Velg hva slags eiendom det er.');
+    const fl = S.floors; const sum = num(fl.hoved)+num(fl.under)+num(fl.loft)+num(fl.kjeller);
+    set('#errArea', sum ? (num(fl.sokkel) > num(fl.under) ? 'Sokkelleilighet/hybel kan ikke være større enn underetasjen.' : '') : 'Oppgi bruksareal for minst én etasje.');
+    set('#errYear', S.alder ? '' : 'Velg når boligen ble tatt i bruk.');
+  }
+  if (n === 3){
+    set('#errTomt', (S.noMaal || num(S.tomt)) ? '' : 'Oppgi tomteareal, eller kryss av for at målebrev ikke finnes.');
+    set('#errSone', S.sone !== '' ? '' : 'Velg sone.');
+  }
+  return ok;
+}
+
+function updateStdAvailability(){
+  const a = CONFIG.alder.find(x => x.id === S.alder);
+  document.querySelectorAll('input[name=std]').forEach(inp => {
+    const v = inp.value;
+    let dis = false;
+    if (a && v === 'hoy' && a.hoy == null) dis = true;
+    if (a && v === 'lav' && !a.lav) dis = true;
+    inp.disabled = dis;
+    const small = inp.closest('.opt').querySelector('small');
+    const base = CONFIG.standarder.find(s => s.id === v).tekst;
+    if (!a) small.textContent = base;
+    else if (dis) small.textContent = 'Ikke aktuelt for bygg tatt i bruk 2010 eller senere';
+    else {
+      const f = v === 'hoy' ? a.hoy : v === 'lav' ? a.lav : a.normal;
+      small.textContent = base + ' · indre faktor ' + (Array.isArray(f) ? fx(f[0]) + '–' + fx(f[1]) : fx(f));
+    }
+  });
+  if (document.querySelector('input[name=std]:checked')?.disabled){
+    document.querySelector('input[name=std][value=normal]').checked = true; S.standard = 'normal';
+  }
+}
+
+function renderSide(){
+  const r = beregn(S);
+  $('#weighted').textContent = m2(Math.round(r.vektet*10)/10);
+  const rows = [];
+  rows.push(['Vektet bruksareal', m2(Math.round(r.vektet))]);
+  rows.push(['Sonefaktor', r.sone ? fx(r.sone.faktor) : '–']);
+  rows.push(['Indre faktor', r.indre != null ? fx(r.indre) : '–']);
+  if (r.takst != null) rows.push(['Takst', kr(r.takst)]);
+  $('#boxRows').innerHTML = rows.map(([k,v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('');
+
+  if (r.skatt != null){
+    $('#bigVal').textContent = kr(r.skatt);
+    $('#bigUnit').textContent = `per år · ${CONFIG.terminer} terminer à ca. ${kr(r.skatt/CONFIG.terminer)}`;
+    $('#mVal').textContent = kr(r.skatt) + ' / år';
+    // Hva om: standard
+    const a = CONFIG.alder.find(x => x.id === S.alder);
+    const alts = CONFIG.standarder.filter(s => !(s.id==='hoy' && a.hoy==null) && !(s.id==='lav' && !a.lav));
+    if (alts.length > 1){
+      $('#whatIf').innerHTML = '<hr><h3>Hva om standarden er …</h3>' + alts.map(s => {
+        const rr = beregn({...S, standard:s.id});
+        const kort = s.id==='normal'?'Normal':s.id==='hoy'?'Oppgradert':'Dårligere';
+        return `<div class="kv${s.id===S.standard?' cur':''}"><span>${kort}${s.id===S.standard?' (valgt)':''}</span><b>${kr(rr.skatt)}</b></div>`;
+      }).join('') + '<p class="note">Standard vurderes av kommunen ved besiktigelse.</p>';
+    } else $('#whatIf').innerHTML = '';
+  } else {
+    $('#bigVal').textContent = '–';
+    const m = mangler();
+    $('#bigUnit').textContent = m.length ? 'Mangler: ' + m.map(x => x.tekst.toLowerCase()).join(', ') : '';
+    $('#mVal').textContent = '–';
+    $('#whatIf').innerHTML = '';
+  }
+}
+
+function renderResult(){
+  const r = beregn(S);
+  const m = mangler();
+  $('#resMissing').innerHTML = m.length ? `<div class="missing" role="alert"><b>Noen opplysninger mangler:</b><ul>${m.map(x => `<li>${esc(x.tekst)} – <button type="button" class="btn link" data-go="${x.steg}">gå til steg ${x.steg}</button></li>`).join('')}</ul></div>` : '';
+  const t = CONFIG.boligtyper.find(x => x.id === S.type);
+  $('#resSub').textContent = [t ? t.navn : null, r.sone ? 'Sone: ' + r.sone.navn : null, 'Skatteår ' + CONFIG.skatteaar].filter(Boolean).join(' · ');
+
+  let h = '<div class="tablewrap"><table><caption>Sjablongverdi</caption><thead><tr><th scope="col">Objekt</th><th class="n" scope="col">Areal</th><th class="n" scope="col">Faktor</th><th class="n" scope="col">Sats per m²</th><th class="n" scope="col">Verdi</th></tr></thead><tbody>';
+  for (const x of r.rows){
+    h += `<tr><td>${esc(x.obj)}${x.fri?'<small>Ikke skattepliktig (15 m² eller mindre)</small>':''}</td><td class="n">${m2(x.areal)}</td><td class="n">${fx(x.faktor)}</td><td class="n">${nf0.format(x.sats)} kr</td><td class="n${x.fri?' free':''}">${nf0.format(Math.round(x.verdi))}</td></tr>`;
+  }
+  const tomtNote = S.noMaal ? 'Målebrev finnes ikke' : (r.oppgitt > r.tomtAreal ? `Oppgitt ${m2(r.oppgitt)}, maks ${m2(r.tomtAreal)} regnes med` : '');
+  h += `<tr><td>Tomt${tomtNote?`<small>${esc(tomtNote)}</small>`:''}</td><td class="n">${m2(r.tomtAreal)}</td><td class="n">–</td><td class="n">${nf0.format(CONFIG.tomt.pris)} kr</td><td class="n">${nf0.format(r.tomtVerdi)}</td></tr>`;
+  h += `<tr class="tot"><td colspan="4">Sum sjablongverdi</td><td class="n">${nf0.format(Math.round(r.sjablong))}</td></tr></tbody></table></div>`;
+
+  if (r.takst != null){
+    const indreT = esc(CONFIG.alder.find(a=>a.id===S.alder).navn) + ', ' + CONFIG.standarder.find(s=>s.id===S.standard).navn.toLowerCase() + (S.standard==='lav' ? ' (overslaget bruker midtverdien)' : '');
+    let run = r.sjablong;
+    h += '<div class="tablewrap"><table><caption>Fra sjablongverdi til eiendomsskatt</caption><thead><tr><th scope="col">Trinn</th><th class="n" scope="col">Faktor</th><th class="n" scope="col">Beløp</th></tr></thead><tbody>';
+    run *= r.sone.faktor;
+    h += `<tr class="op"><td>Sonefaktor<small>${esc(r.sone.navn)}</small></td><td class="n">× ${fx(r.sone.faktor)}</td><td class="n">${nf0.format(Math.round(run))}</td></tr>`;
+    run *= r.ytre.faktor;
+    h += `<tr class="op"><td>Ytre faktor<small>${esc(r.ytre.navn)}</small></td><td class="n">× ${fx(r.ytre.faktor)}</td><td class="n">${nf0.format(Math.round(run))}</td></tr>`;
+    run *= r.indre;
+    h += `<tr class="op"><td>Indre faktor (aldersfaktor)<small>${indreT}</small></td><td class="n">× ${fx(r.indre)}</td><td class="n">${nf0.format(Math.round(run))}</td></tr>`;
+    if (S.gard){ run *= r.gardF; h += `<tr class="op"><td>Gårdbrukers bolig på gårdsbruk i drift</td><td class="n">× ${fx(r.gardF)}</td><td class="n">${nf0.format(Math.round(run))}</td></tr>`; }
+    h += `<tr class="tot"><td colspan="2">Takst</td><td class="n">${kr(r.takst)}</td></tr>`;
+    h += `<tr class="op"><td>Reduksjon for bolig og fritidsbolig<small>Eiendomsskatteloven § 8 A-2</small></td><td class="n">× ${fx(CONFIG.reduksjonsfaktor)}</td><td class="n">${nf0.format(Math.round(r.takst*CONFIG.reduksjonsfaktor))}</td></tr>`;
+    if (r.bunn > 0) h += `<tr class="op"><td>Bunnfradrag</td><td class="n"></td><td class="n">− ${nf0.format(r.bunn)}</td></tr>`;
+    h += `<tr class="tot"><td colspan="2">Skattegrunnlag</td><td class="n">${kr(r.grunnlag)}</td></tr>`;
+    h += `<tr class="tot"><td>Eiendomsskatt per år</td><td class="n">× ${nf2.format(CONFIG.skattesatsPromille).replace(/,00$/,'')} ‰</td><td class="n">${kr(r.skatt)}</td></tr>`;
+    h += `<tr class="op"><td>Per termin (${CONFIG.terminer} terminer)</td><td class="n"></td><td class="n">ca. ${kr(r.skatt/CONFIG.terminer)}</td></tr>`;
+    h += '</tbody></table></div>';
+  }
+  $('#resBody').innerHTML = h;
+}
+
+/* Feilmeldinger som allerede vises, oppdateres når brukeren retter opp */
+function refreshErrors(){
+  const shown = document.querySelector(`.panel[data-step="${S.step}"] .error:not(:empty)`);
+  if (shown) validateStep(S.step);
+}
+
+/* ================================ Hendelser ================================ */
+function bind(){
+  document.addEventListener('click', e => {
+    const go = e.target.closest('[data-go]');
+    if (go){
+      const to = +go.dataset.go;
+      if (to > S.step && S.step !== 4 && !validateStep(S.step)){
+        const firstErr = document.querySelector(`.panel[data-step="${S.step}"] .error:not(:empty)`);
+        firstErr && firstErr.scrollIntoView({block:'center', behavior:'smooth'});
+        return;
+      }
+      showStep(to);
+    }
+    const rm = e.target.closest('[data-rm]');
+    if (rm){ S.bygg = S.bygg.filter(b => String(b.id) !== rm.dataset.rm); renderBygg(); renderSide(); $('#addB').focus(); }
+  });
+  $('#addB').addEventListener('click', () => {
+    const id = ++byggSeq; S.bygg.push({id, type:'garasje', areal:''}); renderBygg(); renderSide();
+    document.getElementById('bt_'+id).focus();
+  });
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t.name === 'type') S.type = t.value;
+    if (t.name === 'alder'){ S.alder = t.value; updateStdAvailability(); }
+    if (t.name === 'std') S.standard = t.value;
+    if (t.name === 'ytre') S.ytre = t.value;
+    if (t.dataset.bt){ S.bygg.find(b => b.id === +t.dataset.bt).type = t.value; }
+    if (t.id === 'sone') S.sone = t.value;
+    if (t.id === 'noMaal'){ S.noMaal = t.checked; $('#tomt').disabled = t.checked; }
+    if (t.id === 'gard') S.gard = t.checked;
+    refreshErrors();
+    renderSide();
+  });
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (t.dataset.floor) S.floors[t.dataset.floor] = t.value;
+    if (t.dataset.ba){
+      S.bygg.find(b => b.id === +t.dataset.ba).areal = t.value;
+      const row = t.closest('.brow'); const a = num(t.value); const fri = a > 0 && a <= CONFIG.fritakMaksAreal;
+      let tag = row.querySelector('.tag');
+      if (fri && !tag){ tag = document.createElement('span'); tag.className='tag'; tag.textContent='Ikke skattepliktig (15 m² eller mindre)'; row.appendChild(tag); }
+      if (!fri && tag) tag.remove();
+    }
+    if (t.id === 'tomt') S.tomt = t.value;
+    refreshErrors();
+    renderSide();
+  });
+  $('#print').addEventListener('click', () => window.print());
+  $('#reset').addEventListener('click', () => { location.hash=''; location.reload(); });
+}
+
+buildForm();
+bind();
+renderBygg();
+updateStdAvailability();
+showStep(1, false);
+renderSide();
+
+/* Testgrensesnitt (brukes til kontroll av beregningene) */
+window.__eskatt = {CONFIG, beregn, S};
+</script>
+</body>
+</html>
